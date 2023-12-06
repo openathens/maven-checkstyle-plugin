@@ -18,14 +18,7 @@
  */
 package org.apache.maven.plugins.checkstyle;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.Reader;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -586,7 +579,20 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
             String msg = "You have " + violationCount + " Checkstyle violation"
                     + ((violationCount > 1 || violationCount == 0) ? "s" : "") + ".";
 
-            if (violationCount > maxAllowedViolations) {
+
+            // TODO: if logViolationCountToFile option enabled
+            File violationCountFile = new File(project.getBuild().getDirectory() + "/checkstyle-violationCount");
+            // TODO: check if file already exists
+            boolean fileCreated = violationCountFile.createNewFile();
+            if (!fileCreated) {
+                getLog().info("Could not create violationCount file");
+            } else {
+                try (FileWriter writer = new FileWriter(violationCountFile)) {
+                    writer.write(Long.toString(violationCount));
+                }
+            }
+
+            if (violationCount > maxAllowedViolations)   {
                 if (failOnViolation) {
                     if (maxAllowedViolations > 0) {
                         msg += " The maximum number of allowed violations is " + maxAllowedViolations + ".";
