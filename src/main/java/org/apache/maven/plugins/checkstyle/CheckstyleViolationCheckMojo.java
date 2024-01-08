@@ -103,10 +103,19 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
      * The maximum number of allowed violations. The execution fails only if the
      * number of violations is above this limit.
      *
-     * @since 2.3
+     * @since 3.3
      */
     @Parameter(property = "checkstyle.maxAllowedViolations", defaultValue = "0")
     private int maxAllowedViolations;
+
+    /**
+     * Write a plain text file to the build directory showing the current number
+     * of violations present.
+     *
+     * @since 2.3
+     */
+    @Parameter(property = "checkstyle.logViolationCountToFile", defaultValue = "false")
+    private boolean logViolationCountToFile;
 
     /**
      * The lowest severity level that is considered a violation.
@@ -579,20 +588,9 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
             String msg = "You have " + violationCount + " Checkstyle violation"
                     + ((violationCount > 1 || violationCount == 0) ? "s" : "") + ".";
 
+            logViolationCountToFile(violationCount);
 
-            // TODO: if logViolationCountToFile option enabled
-            File violationCountFile = new File(project.getBuild().getDirectory() + "/checkstyle-violationCount");
-            // TODO: check if file already exists
-            boolean fileCreated = violationCountFile.createNewFile();
-            if (!fileCreated) {
-                getLog().info("Could not create violationCount file");
-            } else {
-                try (FileWriter writer = new FileWriter(violationCountFile)) {
-                    writer.write(Long.toString(violationCount));
-                }
-            }
-
-            if (violationCount > maxAllowedViolations)   {
+            if (violationCount > maxAllowedViolations) {
                 if (failOnViolation) {
                     if (maxAllowedViolations > 0) {
                         msg += " The maximum number of allowed violations is " + maxAllowedViolations + ".";
@@ -611,6 +609,20 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
         } catch (IOException | XmlPullParserException e) {
             throw new MojoExecutionException(
                     "Unable to read Checkstyle results xml: " + outputXmlFile.getAbsolutePath(), e);
+        }
+    }
+
+    private void logViolationCountToFile(long violationCount) throws IOException {
+        if (logViolationCountToFile) {
+            File violationCountFile = new File(project.getBuild().getDirectory() + "/checkstyle-violationCount");
+            boolean fileCreated = violationCountFile.createNewFile();
+            if (!fileCreated || !violationCountFile.exists()) {
+                getLog().info("Could not create violationCount file");
+            } else {
+                try (FileWriter writer = new FileWriter(violationCountFile)) {
+                    writer.write(Long.toString(violationCount));
+                }
+            }
         }
     }
 
