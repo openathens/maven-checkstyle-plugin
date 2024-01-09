@@ -109,6 +109,15 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
     private int maxAllowedViolations;
 
     /**
+     * Write a plain text file to the build directory showing the current number
+     * of violations present.
+     *
+     * @since 2.3
+     */
+    @Parameter(property = "checkstyle.logViolationCountToFile", defaultValue = "false")
+    private boolean logViolationCountToFile;
+
+    /**
      * The lowest severity level that is considered a violation.
      * Valid values are "<code>error</code>", "<code>warning</code>" and "<code>info</code>".
      *
@@ -580,17 +589,7 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
                     + ((violationCount > 1 || violationCount == 0) ? "s" : "") + ".";
 
 
-            // TODO: if logViolationCountToFile option enabled
-            File violationCountFile = new File(project.getBuild().getDirectory() + "/checkstyle-violationCount");
-            // TODO: check if file already exists
-            boolean fileCreated = violationCountFile.createNewFile();
-            if (!fileCreated) {
-                getLog().info("Could not create violationCount file");
-            } else {
-                try (FileWriter writer = new FileWriter(violationCountFile)) {
-                    writer.write(Long.toString(violationCount));
-                }
-            }
+            logViolationCountToFile(violationCount);
 
             if (violationCount > maxAllowedViolations)   {
                 if (failOnViolation) {
@@ -611,6 +610,20 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
         } catch (IOException | XmlPullParserException e) {
             throw new MojoExecutionException(
                     "Unable to read Checkstyle results xml: " + outputXmlFile.getAbsolutePath(), e);
+        }
+    }
+
+    private void logViolationCountToFile(long violationCount) throws IOException {
+        if (logViolationCountToFile) {
+            File violationCountFile = new File(project.getBuild().getDirectory() + "/checkstyle-violationCount");
+            boolean fileCreated = violationCountFile.createNewFile();
+            if (!fileCreated || !violationCountFile.exists()) {
+                getLog().info("Could not create violationCount file");
+            } else {
+                try (FileWriter writer = new FileWriter(violationCountFile)) {
+                    writer.write(Long.toString(violationCount));
+                }
+            }
         }
     }
 
