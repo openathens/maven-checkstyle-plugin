@@ -28,7 +28,7 @@ under the License.
   </parent>
 
   <artifactId>maven-checkstyle-plugin</artifactId>
-  <version>3.3.2-SNAPSHOT</version>
+  <version>3.3.2</version>
   <packaging>maven-plugin</packaging>
 
   <name>Apache Maven Checkstyle Plugin</name>
