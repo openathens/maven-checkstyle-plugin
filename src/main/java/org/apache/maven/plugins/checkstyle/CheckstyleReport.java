@@ -25,7 +25,6 @@ import org.apache.maven.model.Resource;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.plugins.checkstyle.exec.CheckstyleExecutorRequest;
-import org.apache.maven.project.MavenProject;
 import org.apache.maven.reporting.MavenReportException;
 
 /**
@@ -39,12 +38,6 @@ import org.apache.maven.reporting.MavenReportException;
  */
 @Mojo(name = "checkstyle", requiresDependencyResolution = ResolutionScope.COMPILE, threadSafe = true)
 public class CheckstyleReport extends AbstractCheckstyleReport {
-
-    /** {@inheritDoc} */
-    protected MavenProject getProject() {
-        return project;
-    }
-
     /**
      * {@inheritDoc}
      */
@@ -65,7 +58,6 @@ public class CheckstyleReport extends AbstractCheckstyleReport {
                 .setSourceDirectories(getSourceDirectories())
                 .setResources(resources)
                 .setTestResources(testResources)
-                .setStringOutputStream(stringOutputStream)
                 .setSuppressionsLocation(suppressionsLocation)
                 .setTestSourceDirectories(getTestSourceDirectories())
                 .setPropertyExpansion(propertyExpansion)

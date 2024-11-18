@@ -26,11 +26,13 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 import com.puppycrawl.tools.checkstyle.DefaultLogger;
+import com.puppycrawl.tools.checkstyle.SarifLogger;
 import com.puppycrawl.tools.checkstyle.XMLLogger;
 import com.puppycrawl.tools.checkstyle.api.AuditListener;
 import com.puppycrawl.tools.checkstyle.api.AutomaticBean.OutputStreamOptions;
@@ -40,7 +42,6 @@ import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginManagement;
-import org.apache.maven.model.ReportPlugin;
 import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.descriptor.PluginDescriptor;
 import org.apache.maven.plugins.annotations.Component;
@@ -49,6 +50,7 @@ import org.apache.maven.plugins.checkstyle.exec.CheckstyleExecutor;
 import org.apache.maven.plugins.checkstyle.exec.CheckstyleExecutorException;
 import org.apache.maven.plugins.checkstyle.exec.CheckstyleExecutorRequest;
 import org.apache.maven.plugins.checkstyle.exec.CheckstyleResults;
+import org.apache.maven.project.MavenProject;
 import org.apache.maven.reporting.AbstractMavenReport;
 import org.apache.maven.reporting.MavenReportException;
 import org.codehaus.plexus.configuration.PlexusConfiguration;
@@ -314,7 +316,7 @@ public abstract class AbstractCheckstyleReport extends AbstractMavenReport {
 
     /**
      * Specifies the format of the output to be used when writing to the output
-     * file. Valid values are "<code>plain</code>" and "<code>xml</code>".
+     * file. Valid values are "<code>plain</code>", "<code>sarif</code>" and "<code>xml</code>".
      */
     @Parameter(property = "checkstyle.output.format", defaultValue = "xml")
     private String outputFileFormat;
@@ -344,8 +346,8 @@ public abstract class AbstractCheckstyleReport extends AbstractMavenReport {
     private PluginDescriptor plugin;
 
     /**
-     * Link the violation line numbers to the source xref. Will link
-     * automatically if Maven JXR plugin is being used.
+     * Link the violation line numbers to the (Test) Source XRef. Links will be created automatically if the JXR plugin is
+     * being used.
      *
      * @since 2.1
      */
@@ -353,15 +355,19 @@ public abstract class AbstractCheckstyleReport extends AbstractMavenReport {
     private boolean linkXRef;
 
     /**
-     * Location of the Xrefs to link to.
+     * Location where Source XRef is generated for this project.
+     * <br>
+     * <strong>Default</strong>: {@link #getReportOutputDirectory()} + {@code /xref}
      */
-    @Parameter(defaultValue = "${project.reporting.outputDirectory}/xref")
+    @Parameter
     private File xrefLocation;
 
     /**
-     * Location of the XrefTests to link to.
+     * Location where Test Source XRef is generated for this project.
+     * <br>
+     * <strong>Default</strong>: {@link #getReportOutputDirectory()} + {@code /xref-test}
      */
-    @Parameter(defaultValue = "${project.reporting.outputDirectory}/xref-test")
+    @Parameter
     private File xrefTestLocation;
 
     /**
@@ -473,6 +479,14 @@ public abstract class AbstractCheckstyleReport extends AbstractMavenReport {
         return i18n.getString("checkstyle-report", locale, "report.checkstyle." + key);
     }
 
+    protected MavenProject getProject() {
+        return project;
+    }
+
+    protected List<MavenProject> getReactorProjects() {
+        return reactorProjects;
+    }
+
     /** {@inheritDoc} */
     public void executeReport(Locale locale) throws MavenReportException {
         checkDeprecatedParameterUsage(sourceDirectory, "sourceDirectory", "sourceDirectories");
@@ -525,23 +539,13 @@ public abstract class AbstractCheckstyleReport extends AbstractMavenReport {
                     project,
                     siteTool,
                     effectiveConfigLocation,
+                    linkXRef ? constructXrefLocation(xrefLocation, false) : null,
+                    linkXRef ? constructXrefLocation(xrefTestLocation, true) : null,
+                    linkXRef ? getTestSourceDirectories() : Collections.emptyList(),
                     enableRulesSummary,
                     enableSeveritySummary,
                     enableFilesSummary,
                     results);
-            if (linkXRef) {
-                initializeXrefLocation(r);
-                if (r.getXrefLocation() == null && results.getFileCount() > 0) {
-                    getLog().warn("Unable to locate Source XRef to link to - DISABLED");
-                }
-
-                initializeXrefTestLocation(r);
-                if (r.getXrefTestLocation() == null && results.getFileCount() > 0) {
-                    getLog().warn("Unable to locate Test Source XRef to link to - DISABLED");
-                }
-
-                r.setTestSourceDirectories(getTestSourceDirectories());
-            }
             if (treeWalkerNames != null) {
                 r.setTreeWalkerNames(treeWalkerNames);
             }
@@ -619,10 +623,16 @@ public abstract class AbstractCheckstyleReport extends AbstractMavenReport {
                 listener = new XMLLogger(out, OutputStreamOptions.CLOSE);
             } else if ("plain".equals(outputFileFormat)) {
                 listener = new DefaultLogger(out, OutputStreamOptions.CLOSE);
+            } else if ("sarif".equals(outputFileFormat)) {
+                try {
+                    listener = new SarifLogger(out, OutputStreamOptions.CLOSE);
+                } catch (IOException e) {
+                    throw new MavenReportException("Failed to create SarifLogger", e);
+                }
             } else {
                 // TODO: failure if not a report
                 throw new MavenReportException(
-                        "Invalid output file format: (" + outputFileFormat + "). Must be 'plain' or 'xml'.");
+                        "Invalid output file format: (" + outputFileFormat + "). Must be 'plain', 'sarif' or 'xml'.");
             }
         }
 
@@ -651,12 +661,11 @@ public abstract class AbstractCheckstyleReport extends AbstractMavenReport {
      * @return The console listener.
      * @throws MavenReportException If something goes wrong.
      */
-    protected DefaultLogger getConsoleListener() throws MavenReportException {
-        DefaultLogger consoleListener;
+    protected AuditListener getConsoleListener() throws MavenReportException {
+        AuditListener consoleListener;
 
         if (useFile == null) {
-            stringOutputStream = new ByteArrayOutputStream();
-            consoleListener = new DefaultLogger(stringOutputStream, OutputStreamOptions.NONE);
+            consoleListener = new MavenConsoleLogger(getLog());
         } else {
             OutputStream out = getOutputStream(useFile);
 
@@ -664,24 +673,6 @@ public abstract class AbstractCheckstyleReport extends AbstractMavenReport {
         }
 
         return consoleListener;
-    }
-
-    private void initializeXrefLocation(CheckstyleReportRenderer renderer) {
-        String relativePath = determineRelativePath(xrefLocation);
-        if (xrefLocation.exists() || checkMavenJxrPluginIsConfigured()) {
-            // XRef was already generated by manual execution of a lifecycle binding
-            // the report is on its way
-            renderer.setXrefLocation(relativePath);
-        }
-    }
-
-    private void initializeXrefTestLocation(CheckstyleReportRenderer renderer) {
-        String relativePath = determineRelativePath(xrefTestLocation);
-        if (xrefTestLocation.exists() || checkMavenJxrPluginIsConfigured()) {
-            // XRef was already generated by manual execution of a lifecycle binding
-            // the report is on its way
-            renderer.setXrefTestLocation(relativePath);
-        }
     }
 
     private String determineRelativePath(File location) {
@@ -692,17 +683,6 @@ public abstract class AbstractCheckstyleReport extends AbstractMavenReport {
         }
 
         return relativePath + "/" + location.getName();
-    }
-
-    private boolean checkMavenJxrPluginIsConfigured() {
-        for (ReportPlugin report : (Iterable<ReportPlugin>) getProject().getReportPlugins()) {
-            String artifactId = report.getArtifactId();
-            if ("maven-jxr-plugin".equals(artifactId) || "jxr-maven-plugin".equals(artifactId)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     protected List<File> getSourceDirectories() {

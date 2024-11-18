@@ -1,3 +1,5 @@
+package org;
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -17,6 +19,6 @@
  * under the License.
  */
 
-assert new File(basedir, 'target/reports/checkstyle.html').exists();
-
-return true;
+public class MyClass
+{
+}

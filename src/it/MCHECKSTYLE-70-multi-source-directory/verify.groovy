@@ -1,3 +1,4 @@
+
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -16,7 +17,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+def buildLog = new File( basedir, 'build.log' )
 
-assert new File(basedir, 'target/reports/checkstyle.html').exists();
-
-return true;
+// 2 errors in src/additional/java and 1 errors in src/test-additional/java
+assert buildLog.text.contains( "[INFO] There are 3 errors reported by Checkstyle" )

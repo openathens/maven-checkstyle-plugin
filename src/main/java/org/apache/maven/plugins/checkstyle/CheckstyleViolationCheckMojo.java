@@ -18,7 +18,15 @@
  */
 package org.apache.maven.plugins.checkstyle;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -27,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.puppycrawl.tools.checkstyle.DefaultLogger;
+import com.puppycrawl.tools.checkstyle.SarifLogger;
 import com.puppycrawl.tools.checkstyle.XMLLogger;
 import com.puppycrawl.tools.checkstyle.api.AuditListener;
 import com.puppycrawl.tools.checkstyle.api.AutomaticBean.OutputStreamOptions;
@@ -85,7 +94,7 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
 
     /**
      * Specifies the format of the output to be used when writing to the output
-     * file. Valid values are "<code>plain</code>" and "<code>xml</code>".
+     * file. Valid values are "<code>plain</code>", "<code>sarif</code>" and "<code>xml</code>".
      */
     @Parameter(property = "checkstyle.output.format", defaultValue = "xml")
     private String outputFileFormat;
@@ -487,7 +496,7 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
     @Parameter(property = "checkstyle.excludeGeneratedSources", defaultValue = "false")
     private boolean excludeGeneratedSources;
 
-    private ByteArrayOutputStream stringOutputStream;
+    private AuditListener auditListener;
 
     private File outputXmlFile;
 
@@ -542,7 +551,6 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
                         .setSourceDirectories(getSourceDirectories())
                         .setResources(resources)
                         .setTestResources(testResources)
-                        .setStringOutputStream(stringOutputStream)
                         .setSuppressionsLocation(suppressionsLocation)
                         .setTestSourceDirectories(getTestSourceDirectories())
                         .setConfigLocation(effectiveConfigLocation)
@@ -765,12 +773,11 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
         return false;
     }
 
-    private DefaultLogger getConsoleListener() throws MojoExecutionException {
-        DefaultLogger consoleListener;
+    private AuditListener getConsoleListener() throws MojoExecutionException {
+        AuditListener consoleListener;
 
         if (useFile == null) {
-            stringOutputStream = new ByteArrayOutputStream();
-            consoleListener = new DefaultLogger(stringOutputStream, OutputStreamOptions.NONE);
+            consoleListener = new MavenConsoleLogger(getLog());
         } else {
             OutputStream out = getOutputStream(useFile);
 
@@ -817,6 +824,21 @@ public class CheckstyleViolationCheckMojo extends AbstractMojo {
                     CompositeAuditListener compoundListener = new CompositeAuditListener();
                     compoundListener.addListener(new XMLLogger(xmlOut, OutputStreamOptions.CLOSE));
                     compoundListener.addListener(new DefaultLogger(out, OutputStreamOptions.CLOSE));
+                    listener = compoundListener;
+                } catch (IOException e) {
+                    throw new MojoExecutionException("Unable to create temporary file", e);
+                }
+            } else if ("sarif".equals(outputFileFormat)) {
+                try {
+                    // Write a sarif output file to the standard output file,
+                    // and write an XML output file to the temp directory that can be used to count violations
+                    outputXmlFile =
+                            Files.createTempFile("checkstyle-result", ".xml").toFile();
+                    outputXmlFile.deleteOnExit();
+                    OutputStream xmlOut = getOutputStream(outputXmlFile);
+                    CompositeAuditListener compoundListener = new CompositeAuditListener();
+                    compoundListener.addListener(new XMLLogger(xmlOut, OutputStreamOptions.CLOSE));
+                    compoundListener.addListener(new SarifLogger(out, OutputStreamOptions.CLOSE));
                     listener = compoundListener;
                 } catch (IOException e) {
                     throw new MojoExecutionException("Unable to create temporary file", e);

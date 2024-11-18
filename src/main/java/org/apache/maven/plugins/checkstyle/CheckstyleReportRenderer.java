@@ -69,7 +69,7 @@ public class CheckstyleReportRenderer extends AbstractMavenReportRenderer {
 
     private String xrefTestLocation;
 
-    private List<File> testSourceDirectories = new ArrayList<>();
+    private List<File> testSourceDirectories;
 
     private List<String> treeWalkerNames = Collections.singletonList("TreeWalker");
 
@@ -84,6 +84,9 @@ public class CheckstyleReportRenderer extends AbstractMavenReportRenderer {
             MavenProject project,
             SiteTool siteTool,
             String ruleset,
+            String xrefLocation,
+            String xrefTestLocation,
+            List<File> testSourceDirectories,
             boolean enableRulesSummary,
             boolean enableSeveritySummary,
             boolean enableFilesSummary,
@@ -94,6 +97,9 @@ public class CheckstyleReportRenderer extends AbstractMavenReportRenderer {
         this.project = project;
         this.siteTool = siteTool;
         this.ruleset = ruleset;
+        this.xrefLocation = xrefLocation;
+        this.xrefTestLocation = xrefTestLocation;
+        this.testSourceDirectories = testSourceDirectories;
         this.enableRulesSummary = enableRulesSummary;
         this.enableSeveritySummary = enableSeveritySummary;
         this.enableFilesSummary = enableFilesSummary;
@@ -242,7 +248,8 @@ public class CheckstyleReportRenderer extends AbstractMavenReportRenderer {
         // column 2: Rule name + configured attributes
         sink.tableCell();
         if (!"extension".equals(category)) {
-            sink.link("https://checkstyle.org/config_" + category + ".html#" + ruleName);
+            sink.link(
+                    "https://checkstyle.org/checks/" + category + "/" + ruleName.toLowerCase(Locale.ENGLISH) + ".html");
             sink.text(ruleName);
             sink.link_();
         } else {
@@ -541,9 +548,9 @@ public class CheckstyleReportRenderer extends AbstractMavenReportRenderer {
     private String getEffectiveXrefLocation(List<AuditEvent> eventList) {
         String absoluteFilename = eventList.get(0).getFileName();
         if (isTestSource(absoluteFilename)) {
-            return getXrefTestLocation();
+            return xrefTestLocation;
         } else {
-            return getXrefLocation();
+            return xrefLocation;
         }
     }
 
@@ -555,26 +562,6 @@ public class CheckstyleReportRenderer extends AbstractMavenReportRenderer {
         }
 
         return false;
-    }
-
-    public String getXrefLocation() {
-        return xrefLocation;
-    }
-
-    public void setXrefLocation(String xrefLocation) {
-        this.xrefLocation = xrefLocation;
-    }
-
-    public String getXrefTestLocation() {
-        return xrefTestLocation;
-    }
-
-    public void setXrefTestLocation(String xrefTestLocation) {
-        this.xrefTestLocation = xrefTestLocation;
-    }
-
-    public void setTestSourceDirectories(List<File> testSourceDirectories) {
-        this.testSourceDirectories = testSourceDirectories;
     }
 
     public void setTreeWalkerNames(List<String> treeWalkerNames) {

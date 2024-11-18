@@ -19,8 +19,5 @@ package org;
  * under the License.
  */
 
-/**
- * My class.
- */
-public class MyClass {
+public class MyClassTest {
 }
